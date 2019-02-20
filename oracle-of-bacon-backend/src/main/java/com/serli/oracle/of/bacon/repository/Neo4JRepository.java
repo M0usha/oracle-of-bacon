@@ -1,25 +1,50 @@
 package com.serli.oracle.of.bacon.repository;
 
 
-import org.neo4j.driver.v1.AuthTokens;
-import org.neo4j.driver.v1.Driver;
-import org.neo4j.driver.v1.GraphDatabase;
-import org.neo4j.driver.v1.Session;
+import org.neo4j.driver.v1.*;
+import org.neo4j.driver.v1.types.Path;
 
+import java.util.LinkedList;
 import java.util.List;
 
 public class Neo4JRepository {
+
     private final Driver driver;
 
     public Neo4JRepository() {
-        this.driver = GraphDatabase.driver("bolt://localhost:7687", AuthTokens.basic("neo4j", "password"));
+        this.driver = GraphDatabase.driver("bolt://localhost:7687", AuthTokens.basic("neo4j", "#neo4j1*"));
     }
 
-    public List<?> getConnectionsToKevinBacon(String actorName) {
+    public List<GraphItem> getConnectionsToKevinBacon(String actorName) {
         Session session = driver.session();
+        Transaction t = session.beginTransaction();
+        String query = "match (kb:Actors {name: 'Bacon, Kevin (I)'}), (a:Actors {name: {targetActorName}}), p = shortestPath((kb)-[:PLAYED_IN*]-(a)) return p";
+        StatementResult res = t.run(query, Values.parameters("targetActorName", actorName));
 
-        // TODO implement Oracle of Bacon
-        return null;
+        List<GraphItem> graph = new LinkedList<>();
+
+        while (res.hasNext()) {
+            res.next().values().forEach(val -> {
+                Path p = val.asPath();
+
+                p.nodes().forEach(node -> {
+                        String nodeType = node.labels().iterator().next();
+                        graph.add(new GraphNode(node.id(),
+                                node.get("Actors".equals(nodeType) ? "name" : "title").asString(),
+                                nodeType));
+                    }
+                );
+
+                p.relationships().forEach(rel -> graph.add(new GraphEdge(
+                        rel.id(),
+                        rel.startNodeId(),
+                        rel.endNodeId(),
+                        rel.type()
+                )));
+            });
+        }
+
+        return graph;
     }
 
     public static abstract class GraphItem {
@@ -54,6 +79,17 @@ public class Neo4JRepository {
             this.value = value;
             this.type = type;
         }
+
+        @Override
+        public String toString() {
+            StringBuilder builder = new StringBuilder();
+            builder.append("{ \"data\": {");
+                builder.append("\"id\": "+id+",");
+                builder.append("\"type\": \""+type+"\",");
+                builder.append("\"value\": \""+value+"\"");
+            builder.append("}}");
+            return builder.toString();
+        }
     }
 
     private static class GraphEdge extends GraphItem {
@@ -66,6 +102,18 @@ public class Neo4JRepository {
             this.source = source;
             this.target = target;
             this.value = value;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder builder = new StringBuilder();
+            builder.append("{ \"data\": {");
+                builder.append("\"id\": "+id+",");
+                builder.append("\"source\": "+source+",");
+                builder.append("\"target\": "+target+",");
+                builder.append("\"value\": \""+value+"\"");
+            builder.append("}}");
+            return builder.toString();
         }
     }
 }
