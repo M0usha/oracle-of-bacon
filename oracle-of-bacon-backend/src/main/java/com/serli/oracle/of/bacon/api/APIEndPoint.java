@@ -26,6 +26,7 @@ public class APIEndPoint {
 
     @Get("bacon-to?actor=:actorName")
     public String getConnectionsToKevinBacon(String actorName) {
+        redisRepository.add(actorName);
         List<Neo4JRepository.GraphItem> graph =
                 neo4JRepository.getConnectionsToKevinBacon(actorName);
         String items = graph.stream().map(item -> item.toString()).collect(Collectors.joining(","));
@@ -43,11 +44,7 @@ public class APIEndPoint {
 
     @Get("last-searches")
     public List<String> last10Searches() {
-        return Arrays.asList("Peckinpah, Sam",
-                "Robbins, Tim (I)",
-                "Freeman, Morgan (I)",
-                "De Niro, Robert",
-                "Pacino, Al (I)");
+        return redisRepository.getLastTenSearches();
     }
 
     @Get("actor?name=:actorName")
